@@ -76,19 +76,21 @@ async def _read_file_bytes(file: UploadFile) -> tuple[bytes, str]:
     return content, media_type
 
 def _convert_pdf_to_images(raw_bytes: bytes) -> list[tuple[bytes, str]]:
-    """Convert each page of a PDF to a PNG image."""
-    from pdf2image import convert_from_bytes
-    import io
+    """Convert each page of a PDF to a PNG image using PyMuPDF (fitz).
 
-    # Windows pe poppler ka exact path do
-    poppler_path = r"C:\Users\hp pc\Downloads\Release-26.02.0-0\poppler-26.02.0\Library\bin"
+    PyMuPDF is a pure-Python library — no system dependencies required,
+    so it works on Vercel serverless, Docker, and any OS without needing
+    poppler-utils.
+    """
+    import fitz  # PyMuPDF
 
-    images = convert_from_bytes(raw_bytes, dpi=200, poppler_path=poppler_path)
+    doc = fitz.open(stream=raw_bytes, filetype="pdf")
     result: list[tuple[bytes, str]] = []
-    for img in images:
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        result.append((buf.getvalue(), "image/png"))
+    for page in doc:
+        # Render at 2x zoom (~200 DPI)
+        pix = page.get_pixmap(dpi=200)
+        result.append((pix.tobytes("png"), "image/png"))
+    doc.close()
     return result
 
 def _parse_llm_json(raw_text: str) -> dict:
